@@ -557,11 +557,9 @@ function renderAuth(){
     const img = document.createElement('img');
     img.src = currentUser.photoURL || 'icon-192.png'; img.alt='';
     img.referrerPolicy = 'no-referrer';
-    const who = document.createElement('span');
-    who.className='who'; who.textContent = currentUser.displayName || currentUser.email || 'Signed in';
     const out = document.createElement('button');
     out.className='btn-sm'; out.textContent='Sign out'; out.onclick=doSignOut;
-    area.append(img, who, out);
+    area.append(img, out);
   }else{
     const inBtn = document.createElement('button');
     inBtn.className='btn-sm primary'; inBtn.textContent='Sign in'; inBtn.onclick=doSignIn;
