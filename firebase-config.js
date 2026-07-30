@@ -9,10 +9,11 @@
 // security rules, not by hiding this file.
 // ---------------------------------------------------------------------------
 export const firebaseConfig = {
-  apiKey: "PASTE_API_KEY",
-  authDomain: "PASTE_PROJECT_ID.firebaseapp.com",
-  projectId: "PASTE_PROJECT_ID",
-  storageBucket: "PASTE_PROJECT_ID.appspot.com",
-  messagingSenderId: "PASTE_SENDER_ID",
-  appId: "PASTE_APP_ID"
+  apiKey: "AIzaSyDWNfKayZVNLooEGNgHo3_o3926VgP_mQ4",
+  authDomain: "spend-tracker-3a478.firebaseapp.com",
+  projectId: "spend-tracker-3a478",
+  storageBucket: "spend-tracker-3a478.firebasestorage.app",
+  messagingSenderId: "116802849129",
+  appId: "1:116802849129:web:ec7c94a6ec6f29b2cdd5f8",
+  measurementId: "G-VVNHK39FDN"
 };
