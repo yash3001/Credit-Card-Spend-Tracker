@@ -167,7 +167,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect,
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getFirestore, doc, setDoc, onSnapshot }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { firebaseConfig } from "./firebase-config.js";
+import { firebaseConfig, ALLOWED_EMAIL } from "./firebase-config.js";
 
 // ---- Card config: statement day of month ----
 const CARDS = [
@@ -382,6 +382,16 @@ function initFirebase(){
   getRedirectResult(auth).catch(()=>{});
 
   onAuthStateChanged(auth, user => {
+    // Owner-only gate: reject any account that isn't the allowed email.
+    const allow = (ALLOWED_EMAIL || '').trim().toLowerCase();
+    if(user && allow && !allow.startsWith('paste') &&
+       (user.email || '').toLowerCase() !== allow){
+      currentUser = null;
+      renderAuth();
+      setSync('This app is private — only its owner can sign in.', 'warn');
+      signOut(auth);
+      return;
+    }
     currentUser = user;
     renderAuth();
     if(user){ startCloudSync(user); }
