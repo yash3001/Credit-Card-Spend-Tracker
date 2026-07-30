@@ -112,9 +112,32 @@
   }
   .grand .amt{font-size:32px; font-weight:700; letter-spacing:-.5px}
   .grand .lbl{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:1px}
+  /* Sign-in gate */
+  #gate{
+    display:none; position:fixed; inset:0; z-index:50; background:var(--bg);
+    flex-direction:column; align-items:center; justify-content:center; text-align:center;
+    padding:32px 24px; gap:14px;
+  }
+  #gate .logo{font-size:56px}
+  #gate h2{margin:0; font-size:22px}
+  #gate p{margin:0; color:var(--muted); font-size:14px; max-width:280px}
+  #gate .signin{
+    margin-top:8px; background:var(--accent); color:#04263a; border:none; font-weight:700;
+    font-size:16px; padding:14px 28px; border-radius:12px; cursor:pointer;
+  }
+  #gateMsg{color:#fbbf24; font-size:13px; min-height:16px}
+  body.locked header, body.locked main{display:none}
+  body.locked #gate{display:flex}
 </style>
 </head>
 <body>
+<div id="gate">
+  <div class="logo">💳</div>
+  <h2>Spend Tracker</h2>
+  <p>Sign in to access your spends. This app is private to its owner.</p>
+  <button class="signin" id="gateSignIn">Sign in with Google</button>
+  <div id="gateMsg"></div>
+</div>
 <header>
   <div class="topbar">
     <h1>💳 Spend Tracker</h1>
@@ -367,12 +390,20 @@ function mergeById(a, b){
 
 let auth = null, provider = null, unsubscribeDoc = null;
 
+function updateGate(){
+  // When cloud is configured, the app is locked until the owner signs in.
+  const locked = cloudConfigured() && !currentUser;
+  document.body.classList.toggle('locked', locked);
+}
+
 function initFirebase(){
+  document.getElementById('gateSignIn').onclick = doSignIn;
   if(!cloudConfigured()){
     setSync('Cloud sync not configured — data stays on this device.', 'warn');
     document.getElementById('signInBtn').style.display = 'none';
     return;
   }
+  document.body.classList.add('locked'); // hide app until auth state resolves
   const app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
@@ -388,12 +419,16 @@ function initFirebase(){
        (user.email || '').toLowerCase() !== allow){
       currentUser = null;
       renderAuth();
-      setSync('This app is private — only its owner can sign in.', 'warn');
+      updateGate();
+      document.getElementById('gateMsg').textContent =
+        'That account is not authorized. This app is private to its owner.';
       signOut(auth);
       return;
     }
     currentUser = user;
+    if(user){ document.getElementById('gateMsg').textContent = ''; }
     renderAuth();
+    updateGate();
     if(user){ startCloudSync(user); }
     else { stopCloudSync(); }
   });
