@@ -2,3 +2,5 @@
 _chk.*
 .DS_Store
 Thumbs.db
+.claude/
+*.stackdump
