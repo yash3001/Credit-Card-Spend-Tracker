@@ -125,6 +125,13 @@
   }
   .grand .amt{font-size:32px; font-weight:700; letter-spacing:-.5px}
   .grand .lbl{font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:1px}
+  .subtotals{display:flex; gap:10px; margin-top:6px}
+  .subtotal{
+    flex:1; background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding:14px; text-align:center;
+  }
+  .subtotal .amt{font-size:22px; font-weight:700}
+  .subtotal .lbl{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; margin-bottom:2px}
   /* Sign-in gate */
   #gate{
     display:none; position:fixed; inset:0; z-index:50; background:var(--bg);
@@ -168,6 +175,16 @@
       <div class="amt" id="grandTotal">₹0</div>
     </div>
     <div class="summary" id="summaryList"></div>
+    <div class="subtotals">
+      <div class="subtotal">
+        <div class="lbl">Cards</div>
+        <div class="amt" id="cardsSubtotal">₹0</div>
+      </div>
+      <div class="subtotal">
+        <div class="lbl">UPI</div>
+        <div class="amt" id="upiSubtotal">₹0</div>
+      </div>
+    </div>
   </section>
 
   <section id="cardView">
@@ -205,7 +222,8 @@ import { getFirestore, doc, setDoc, onSnapshot }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { firebaseConfig, ALLOWED_EMAIL } from "./firebase-config.js";
 
-// ---- Card config: statement day of month ----
+// ---- Config ----
+// Credit cards: tracked per statement cycle (stmtDay = statement day of month).
 const CARDS = [
   {id:"amazon_icici", name:"Amazon Pay ICICI", stmtDay:12},
   {id:"sbi_cashback", name:"SBI Cashback",     stmtDay:6},
@@ -213,6 +231,10 @@ const CARDS = [
   {id:"onecard",      name:"OneCard",           stmtDay:22},
   {id:"axis_myzone",  name:"Axis MyZone",       stmtDay:10},
 ];
+// UPI: no statement date, tracked per calendar month.
+const UPI = {id:"upi", name:"UPI", upi:true};
+// All selectable items (cards + UPI).
+const ITEMS = [...CARDS, UPI];
 const STORE_KEY = "spendTracker.v1";
 
 // ---- State ----
@@ -254,6 +276,17 @@ function cycleFor(stmtDay, offset){
   return {start, end};
 }
 
+// Cycle for any item: statement cycle for cards, calendar month for UPI.
+function cycleForItem(item, offset){
+  if(item.upi){
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    const end   = new Date(now.getFullYear(), now.getMonth() + offset + 1, 1);
+    return {start, end};
+  }
+  return cycleFor(item.stmtDay, offset);
+}
+
 function cycleLabel(start){
   const mon = start.toLocaleString('en-US',{month:'short'});
   return mon + " '" + String(start.getFullYear()).slice(2);
@@ -269,10 +302,10 @@ function money(n){
   return "₹" + n.toLocaleString('en-IN',{maximumFractionDigits:2});
 }
 
-function cycleTotalFor(card, offset){
-  const cyc = cycleFor(card.stmtDay, offset);
+function cycleTotalFor(item, offset){
+  const cyc = cycleForItem(item, offset);
   return spends
-    .filter(s => s.card===card.id && inCycle(s.date, cyc))
+    .filter(s => s.card===item.id && inCycle(s.date, cyc))
     .reduce((sum,x)=> sum + Number(x.amount), 0);
 }
 
@@ -285,23 +318,23 @@ function renderTabs(){
   sb.textContent = '📊 Summary';
   sb.onclick = ()=>{ view='summary'; render(); };
   el.appendChild(sb);
-  CARDS.forEach(c=>{
+  ITEMS.forEach(c=>{
     const b = document.createElement('button');
     b.className = 'tab' + (view==='card' && c.id===activeCard?' active':'');
     b.textContent = c.name;
-    b.onclick = ()=>{ view='card'; activeCard=c.id; cycleOffset=0; render(); };
+    b.onclick = ()=>{ view='card'; activeCard=c.id; cycleOffset=0; editingId=null; render(); };
     el.appendChild(b);
   });
 }
 
 function renderSummary(){
-  let grand = 0;
+  let cardsTotal = 0, upiTotal = 0;
   const list = document.getElementById('summaryList');
   list.innerHTML = '';
-  CARDS.forEach(c=>{
-    const cyc = cycleFor(c.stmtDay, 0);
+  ITEMS.forEach(c=>{
+    const cyc = cycleForItem(c, 0);
     const total = cycleTotalFor(c, 0);
-    grand += total;
+    if(c.upi) upiTotal += total; else cardsTotal += total;
     const endShown = new Date(cyc.end); endShown.setDate(endShown.getDate()-1);
     const opt = {day:'numeric', month:'short'};
     const range = cyc.start.toLocaleDateString('en-US',opt) + " – " + endShown.toLocaleDateString('en-US',opt);
@@ -311,10 +344,12 @@ function renderSummary(){
       '<div class="sinfo"><div class="sname"></div><div class="scyc">'+range+'</div></div>'+
       '<div class="samt">'+money(total)+'</div><div class="schev">›</div>';
     row.querySelector('.sname').textContent = c.name;
-    row.onclick = ()=>{ view='card'; activeCard=c.id; cycleOffset=0; render(); };
+    row.onclick = ()=>{ view='card'; activeCard=c.id; cycleOffset=0; editingId=null; render(); };
     list.appendChild(row);
   });
-  document.getElementById('grandTotal').textContent = money(grand);
+  document.getElementById('grandTotal').textContent = money(cardsTotal + upiTotal);
+  document.getElementById('cardsSubtotal').textContent = money(cardsTotal);
+  document.getElementById('upiSubtotal').textContent = money(upiTotal);
 }
 
 function render(){
@@ -324,11 +359,11 @@ function render(){
   document.getElementById('cardView').style.display = showSummary ? 'none' : '';
   if(showSummary){ renderSummary(); return; }
 
-  const card = CARDS.find(c=>c.id===activeCard);
-  const cyc = cycleFor(card.stmtDay, cycleOffset);
+  const card = ITEMS.find(c=>c.id===activeCard);
+  const cyc = cycleForItem(card, cycleOffset);
 
   // cycle label
-  document.getElementById('cycleName').textContent = cycleLabel(cyc.start) + " statement";
+  document.getElementById('cycleName').textContent = cycleLabel(cyc.start) + (card.upi ? '' : ' statement');
   const endShown = new Date(cyc.end); endShown.setDate(endShown.getDate()-1);
   const opt = {day:'numeric', month:'short'};
   document.getElementById('cycleRange').textContent =
